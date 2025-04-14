@@ -1,4 +1,10 @@
 #include "systemcalls.h"
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <sys/wait.h>
+#include <stdio.h>
+#include <fcntl.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -16,8 +22,7 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
-
-    return true;
+    return system (cmd) == 0;
 }
 
 /**
@@ -40,14 +45,12 @@ bool do_exec(int count, ...)
     va_start(args, count);
     char * command[count+1];
     int i;
+    int status;
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
     }
     command[count] = NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-    command[count] = command[count];
 
 /*
  * TODO:
@@ -58,6 +61,38 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    printf ("\n========\n");
+    fflush (stdout);
+    pid_t pid = fork ();
+    if (pid == 0) { 
+        printf ("Child: executing command.\n");
+
+        execv (command [0], command);
+        perror ("Execv");
+        exit (-1);
+    } 
+    else if (pid > 0) {
+        printf ("Parent: waiting. ");
+        if (waitpid (pid, &status, 0) == pid) {
+            printf ("Waitpid returned child pid. ");
+            if (WIFEXITED (status)) {
+                if (WEXITSTATUS (status)) {
+                    printf ("Returning false.\n");
+                    return false;
+                }
+                return true;
+            }
+            return false;
+        }
+        else {
+            perror ("Waitpid");
+            return false;
+        }
+    } 
+    else {
+        perror ("Fork");
+        return false;
+    }
 
     va_end(args);
 
@@ -80,10 +115,6 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
         command[i] = va_arg(args, char *);
     }
     command[count] = NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-    command[count] = command[count];
-
 
 /*
  * TODO
@@ -92,6 +123,35 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
+    printf ("\n========\n");
+    int kidpid;
+    int fd = open (outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);
+
+    if (fd < 0) { 
+        perror("open"); 
+        abort(); 
+    }
+
+    switch (kidpid = fork()) {
+    case -1: 
+        perror("fork"); 
+        abort();
+    case 0:
+        printf ("Child: starting.\n");
+        if (dup2(fd, STDOUT_FILENO) < 0) { 
+            perror("dup2"); 
+            abort(); 
+        }
+        
+        close(fd);
+        execv(command [0], command); 
+        perror("execv"); 
+        exit (-1);
+    default:
+        close(fd);
+        if (waitpid (kidpid, NULL, 0) != kidpid) {return false;}
+        
+    }
 
     va_end(args);
 
