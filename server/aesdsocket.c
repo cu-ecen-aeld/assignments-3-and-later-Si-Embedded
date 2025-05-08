@@ -31,7 +31,7 @@ static void reset (ReceiveBuffer *buffer);
 
 
 int main (int argc, char **argv) {
-    openlog (NULL, LOG_PERROR| LOG_PID, LOG_USER);
+    openlog (NULL, LOG_PID, LOG_USER);
     
     int status                   = 0;
     int server_socket            = 0;
