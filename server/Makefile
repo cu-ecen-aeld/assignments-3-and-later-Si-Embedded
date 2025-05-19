@@ -4,10 +4,11 @@ CFLAGS:=-Wall -Werror -Wextra
 
 all: aesdsocket
 	
-aesdsocket: aesdsocket.c socket_functions.o
+aesdsocket: aesdsocket.c socket_functions.o connection_handler.o file_io.o \
+			signal_handler.o threads.o periodic_writer_handler.o
 	$(CC) $(CFLAGS) $^ -o $@
 
-socket_functions.o: socket_functions.c
+%.o: %.c
 	$(CC) $(CFLAGS) -c $^ -o $@
 
 test-client: aesdsocket

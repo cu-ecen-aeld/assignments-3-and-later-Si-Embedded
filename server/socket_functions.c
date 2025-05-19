@@ -1,4 +1,6 @@
 #include "socket_functions.h"
+#include "connection_handler.h" /* For thread target and argument struct. */
+#include "file_io.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -7,6 +9,8 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <arpa/inet.h>
+#include <stdio.h>
 
 
 
@@ -56,20 +60,33 @@ int open_socket (FileDescriptor *socket_fd, bool intended_as_daemon) {
     }
 
     if (intended_as_daemon) {
+        syslog (LOG_INFO, "Requested to run as daemon.");
         run_as_daemon ();
     }
 
+    syslog (LOG_DEBUG, "Successfully opened the server socket.");
     *socket_fd = server_socket;
     return 0;
 }
 
 
-Status listen_and_accept (FileDescriptor server_socket, 
-    FileDescriptor *new_connection, struct sockaddr_in *new_connection_details)
+Status wait_for_new_connection (FileDescriptor server_socket, 
+    ThreadData *thread_data)
 {
-    int status = 0;
-    socklen_t length = sizeof (new_connection_details);
+    /* These arguments are always freed when the thread cleaned up by 
+     * th_clean_up_stored_thread_data (). 
+     */
+    ConnectionHandlerArguments* connection = malloc 
+        (sizeof (ConnectionHandlerArguments));
+    if (connection == NULL) {
+        syslog (LOG_ERR, "Could not allocate memory for connection "
+            "parameters.");
+        return -1;
+    }
+    int status                                 = 0;
+    socklen_t length                         = sizeof (&connection->details);
 
+    syslog (LOG_DEBUG, "Listening for a new connection.");
     status = listen (server_socket, 1);
     if (status) {
         syslog (LOG_ERR, "Failed to listen on given socket. \
@@ -77,18 +94,30 @@ Status listen_and_accept (FileDescriptor server_socket,
         return -1;
     }
 
-    *new_connection = accept (server_socket, 
-        (struct sockaddr*) new_connection_details, &length);
-    if (*new_connection == -1) {
+    connection->socket = accept (server_socket, 
+        (struct sockaddr*) &connection->details, &length);
+    if (connection->socket == -1) {
         if (errno == EINTR) {
-            syslog (LOG_INFO, "Accept call interrupted by signal. Exiting.");
+            syslog (LOG_DEBUG, "Accept call interrupted by signal. Exiting.");
         }
         else {
             syslog (LOG_ERR, "Failed to accept the new socket. Exit code: %d. "
                 "%s.", errno, gai_strerror (errno));
         }
+
+        free (connection);
+        connection = NULL;
         return -1;
     }
+
+    syslog (LOG_INFO, "Accepted connection from %s:%d", 
+        inet_ntoa (connection->details.sin_addr), 
+        connection->details.sin_port);
+
+    thread_data->thread_target              = &ch_handle_new_connection;
+    thread_data->thread_arguments           = connection;
+    thread_data->thread_graceful_exit       = &ch_shutdown_connection;
+    thread_data->thread_argument_destructor = &ch_free_arguments;
 
     return 0;
 }
@@ -135,20 +164,34 @@ int newline_is_detected (ReceiveBuffer buffer) {
 }
 
 
-int echo (FileDescriptor socket, ReceiveBuffer buffer) {
+int echo_entire_file (FileDescriptor socket) {
     syslog (LOG_DEBUG, "Echoing back to client.");
-    int bytes_send = send (socket, buffer.data, buffer.size, 0);
-    if (bytes_send == -1) {
-        syslog (LOG_ERR, "Error sending bytes to client. No bytes send.");
-        return -2;
-    }
-    else if (bytes_send != buffer.size) {
-        syslog (LOG_WARNING, "Only %d out of the intended %d bytes have been "
-            "sent.", bytes_send, buffer.size);
-        return -1;
-    }
 
-    syslog (LOG_DEBUG, "Sent %d bytes back.", bytes_send);
+    const size_t internal_buffer_size = 1024;
+    ssize_t bytes_read    = 0;
+    ssize_t bytes_sent    = 0;
+    char buffer [internal_buffer_size];
+
+    FILE *file = fopen (wr_get_file_path (), "r");
+    while (true) {
+        bytes_read = fread (buffer, 1, internal_buffer_size, file);
+        if (!bytes_read) {break;}
+
+        bytes_sent = send (socket, buffer, bytes_read, 0);
+        if (bytes_sent == -1) {
+            syslog (LOG_ERR, "Error sending bytes to client. No bytes send.");
+            return -2;
+        }
+        else if (bytes_sent != bytes_read) {
+            syslog (LOG_WARNING, "Only %ld out of the intended %ld bytes have "
+                "been sent.", bytes_sent, bytes_read);
+            return -3;
+        }
+    
+        syslog (LOG_DEBUG, "Sent %ld bytes back.", bytes_sent);
+    }
+    fclose (file);
+    
     return 0;
 }
 
