@@ -14,10 +14,7 @@
 
 
 
-static void run_as_daemon ();
-
-
-int open_socket (FileDescriptor *socket_fd, bool intended_as_daemon) {
+int open_socket (FileDescriptor *socket_fd) {
     struct addrinfo hints = {0};
     struct addrinfo *server_info = NULL;
     int status;
@@ -57,11 +54,6 @@ int open_socket (FileDescriptor *socket_fd, bool intended_as_daemon) {
     if (status != 0) {
         syslog (LOG_ERR, "Failed to bind the server socket.");
         return -1;
-    }
-
-    if (intended_as_daemon) {
-        syslog (LOG_INFO, "Requested to run as daemon.");
-        run_as_daemon ();
     }
 
     syslog (LOG_DEBUG, "Successfully opened the server socket.");
@@ -193,37 +185,4 @@ int echo_entire_file (FileDescriptor socket) {
     fclose (file);
     
     return 0;
-}
-
-
-static void run_as_daemon () {
-    pid_t pid = fork ();
-
-    if (pid == -1) {syslog (LOG_ERR, "%s", strerror (errno));}
-    else if (pid) {
-        syslog (LOG_INFO, "Child started with PID %d. Parent "
-            "exiting.", pid);
-        exit (EXIT_SUCCESS);
-    }
-    else {
-        syslog (LOG_INFO, "Child started.");
-        if (setsid () == -1) {
-            syslog (LOG_ERR, "%s", strerror (errno));
-            return;
-        }
-        syslog (LOG_INFO, "Started a new session.");
-
-        /* Fork twice to avoid reattaching a terminal. */
-        pid = fork ();
-        if (pid == -1) {syslog (LOG_ERR, "%s", strerror (errno));}
-        else if (pid) {
-            syslog (LOG_INFO, "Child started with PID %d. Parent "
-                "exiting.", pid);
-            syslog (LOG_INFO, "Terminating main session process.");
-            exit (EXIT_SUCCESS);
-        }
-        else {
-            syslog (LOG_INFO, "Continuing as daemon.");
-        }
-    }
 }

@@ -7,7 +7,8 @@ TARGET ?= aesdsocket
 all: $(TARGET)
 	
 $(TARGET): aesdsocket.c socket_functions.o connection_handler.o file_io.o \
-			signal_handler.o threads.o periodic_writer_handler.o
+			signal_handler.o threads.o periodic_writer_handler.o \
+			daemon-runner.o
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
 %.o: %.c

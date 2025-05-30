@@ -10,6 +10,7 @@
 #include "connection_handler.h"
 #include "threads.h"
 #include "periodic_writer_handler.h"
+#include "daemon-runner.h"
 
 
 
@@ -19,6 +20,12 @@ int main (int argc, char **argv) {
     int status                   = 0;
     int server_socket            = 0; 
 
+    /* Run as daemon if requested with the -d parameter. */
+    if ((argc == 2 && strncmp (argv [1], "-d", 2) == 0)) {
+        syslog (LOG_INFO, "Requested to run as daemon.");
+        run_this_as_daemon ();
+    }
+
     if (setup_signal_handler () || wr_init ("/var/tmp/aesdsocketdata")) {
         return -1;
     }
@@ -26,9 +33,7 @@ int main (int argc, char **argv) {
 
     pw_spawn_and_store_periodic_file_writer_thread ();
     
-    /* Run as daemon if requested with the -d parameter. */
-    status = open_socket (&server_socket, 
-        (argc == 2 && strncmp (argv [1], "-d", 2) == 0));
+    status = open_socket (&server_socket);
     if (status) {return 1;}
 
     while (graceful_exit_is_not_requested) {

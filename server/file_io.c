@@ -56,7 +56,24 @@ int wr_write (const char *data, int size) {
 }
 
 
-int write_to_file (const char *buffer, int size) {
+int wr_delete_file () {
+    int status = 0;
+
+    syslog (LOG_DEBUG, "Deleting %s.", internal_file_path);
+    status = unlink (internal_file_path);
+    if (status != 0) {
+        syslog (LOG_WARNING, "Error deleting file. %s.", strerror (errno));
+    }
+    else {
+        syslog (LOG_DEBUG, "Successfully deleted file %s.", 
+            internal_file_path);
+    }
+
+    return status;
+}
+
+
+static int write_to_file (const char *buffer, int size) {
     int bytes_written = 0;
     FILE *file = NULL;
 
@@ -83,21 +100,4 @@ int write_to_file (const char *buffer, int size) {
 
     fclose (file);
     return 0;
-}
-
-
-int wr_delete_file () {
-    int status = 0;
-
-    syslog (LOG_DEBUG, "Deleting %s.", internal_file_path);
-    status = unlink (internal_file_path);
-    if (status != 0) {
-        syslog (LOG_WARNING, "Error deleting file. %s.", strerror (errno));
-    }
-    else {
-        syslog (LOG_DEBUG, "Successfully deleted file %s.", 
-            internal_file_path);
-    }
-
-    return status;
 }

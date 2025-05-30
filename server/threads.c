@@ -136,7 +136,9 @@ void th_clean_up_stored_thread_data () {
             if (!data->has_been_joined) {
                 syslog (LOG_DEBUG, "Joining with thread %lu.", 
                     data->thread);
-                pthread_join (data->thread, NULL);
+
+                int status = pthread_join (data->thread, NULL);
+                if (status) {syslog (LOG_ERR, "%s", strerror (status));}
             }
     
             if (data->thread_arguments) { 
