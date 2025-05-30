@@ -82,6 +82,8 @@ int compile_time_string_in_rfc_2822_format (Buffer *buffer) {
     buffer->size += characters_written;
     buffer->data [buffer->size++] = '\n';
 
+    syslog (LOG_DEBUG, "Compiled rfc2822 timestring: %s", buffer->data);
+
     return 0;
 }
 

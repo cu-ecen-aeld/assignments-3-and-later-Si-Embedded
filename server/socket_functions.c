@@ -121,30 +121,35 @@ int receive_data (FileDescriptor client, ReceiveBuffer *buffer) {
     char internal_buffer [internal_buffer_size];
     char *reallocated_buffer = NULL;
 
-    bytes_received = recv (client, internal_buffer, internal_buffer_size, 0);
-    if (bytes_received == 0) {
-        syslog (LOG_INFO, "No bytes received. The connection to the client "
-            "is assumed terminated.");
-        return 0;
-    }
-    else if (bytes_received == -1) {
-        syslog (LOG_ERR, "Unable to receive bytes from the given socket.");
-        return -2;
-    }
+    while (1) {
+        bytes_received = recv (client, internal_buffer, 
+            internal_buffer_size, 0);
 
-    reallocated_buffer = realloc (buffer->data, buffer->size + bytes_received);
-    if (reallocated_buffer == NULL) {
-        syslog (LOG_WARNING, "Could not reallocate memory for storing newly \
-            received data.");
-        return -4;
-    }
+        if (bytes_received == 0) {
+            syslog (LOG_INFO, "No bytes received. The connection to the client"
+                " is assumed terminated.");
+            return 0;
+        }
+        else if (bytes_received == -1) {
+            syslog (LOG_ERR, "Unable to receive bytes from the given socket.");
+            return -2;
+        }
 
-    buffer->data = reallocated_buffer;
-    memcpy (buffer->data + buffer->size, internal_buffer, bytes_received);
-    buffer->size += bytes_received;
+        reallocated_buffer = realloc (buffer->data, 
+            buffer->size + bytes_received);
+        if (reallocated_buffer == NULL) {
+            syslog (LOG_WARNING, "Could not reallocate memory for storing "
+                " newly received data.");
+            return -4;
+        }
 
-    if (bytes_received == internal_buffer_size) {
-        return bytes_received + receive_data (client, buffer);
+        buffer->data = reallocated_buffer;
+        memcpy (buffer->data + buffer->size, internal_buffer, bytes_received);
+        buffer->size += bytes_received;
+
+        if (bytes_received < internal_buffer_size) {
+            break;
+        }
     }
 
     return bytes_received;
@@ -159,12 +164,19 @@ int newline_is_detected (ReceiveBuffer buffer) {
 int echo_entire_file (FileDescriptor socket) {
     syslog (LOG_DEBUG, "Echoing back to client.");
 
-    const size_t internal_buffer_size = 1024;
+    const size_t internal_buffer_size = 4196;
     ssize_t bytes_read    = 0;
     ssize_t bytes_sent    = 0;
     char buffer [internal_buffer_size];
+    const char *file_path = wr_get_file_path ();
+    
+    FILE *file = fopen (file_path, "r");
+    if (file == NULL) {
+        syslog (LOG_ERR, "Unable to read from file %s.", file_path);
+        return -1;
+    }
 
-    FILE *file = fopen (wr_get_file_path (), "r");
+    syslog (LOG_DEBUG, "Attempting to read from %s.", file_path);
     while (true) {
         bytes_read = fread (buffer, 1, internal_buffer_size, file);
         if (!bytes_read) {break;}

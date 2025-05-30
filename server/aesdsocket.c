@@ -20,6 +20,8 @@ int main (int argc, char **argv) {
     int status                   = 0;
     int server_socket            = 0; 
 
+    syslog (LOG_INFO, "======== Starting socket server ========");
+
     /* Run as daemon if requested with the -d parameter. */
     if ((argc == 2 && strncmp (argv [1], "-d", 2) == 0)) {
         syslog (LOG_INFO, "Requested to run as daemon.");
@@ -31,7 +33,7 @@ int main (int argc, char **argv) {
     }
     th_init ();
 
-    pw_spawn_and_store_periodic_file_writer_thread ();
+    pw_spawn_and_store_periodic_file_writer_thread ();    
     
     status = open_socket (&server_socket);
     if (status) {return 1;}
@@ -50,8 +52,8 @@ int main (int argc, char **argv) {
     syslog (LOG_INFO, "Running clean up.");
     th_request_all_threads_to_exit_gracefully ();
     th_clean_up_stored_thread_data ();
+    wr_cleanup ();
     wr_delete_file ();
-    wr_destroy ();
     close (server_socket);
     closelog ();
 

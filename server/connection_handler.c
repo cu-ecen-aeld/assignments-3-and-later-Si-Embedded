@@ -51,6 +51,7 @@ void *ch_handle_new_connection (void *thread_data) {
             echo_entire_file (connection->socket);
             free (buffer.data);
             buffer.data = NULL; 
+            buffer.size = 0;
         }
     }
 
@@ -73,6 +74,7 @@ void ch_shutdown_connection (void *thread_data) {
     ConnectionHandlerArguments *arguments = data->thread_arguments;
 
     int status = shutdown (arguments->socket, SHUT_RD);
+    syslog (LOG_DEBUG, "Shutting down the socket.");
     if (status) {
         syslog (LOG_ERR, "Error while shutting down socket %d in "
             "thread %lu. %s.",
